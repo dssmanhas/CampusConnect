@@ -6,7 +6,7 @@ import io from 'socket.io-client';
 
 function GroupChat() {
   const { id } = useParams();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [group, setGroup] = useState(null);
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState([]);
@@ -62,9 +62,17 @@ function GroupChat() {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      socketRef.current.emit('send_message', response.data);
+      // Ensure sender info is present (server may not have populated sender for broadcast)
+      const msgToEmit = { ...response.data };
+      if (!msgToEmit.sender || !msgToEmit.sender.username) {
+        msgToEmit.sender = { _id: user?._id, username: user?.username };
+      }
+
+      // Emit to server (server will broadcast to others). Append locally so sender sees message immediately.
+      socketRef.current.emit('send_message', msgToEmit);
+      setMessages(prev => [...prev, msgToEmit]);
       setMessage('');
-      window.location.reload();
+      scrollToBottom();
     } catch (err) {
       console.error('Failed to send message');
     }
@@ -117,7 +125,7 @@ function GroupChat() {
             <div className="h-[600px] flex flex-col">
               <div className="flex-1 overflow-y-auto mb-4 space-y-4">
                 {messages.map((msg, index) => (
-                  <div key={index} className={`message-bubble ${msg.sender && msg.sender._id === group.creator ? 'message-mine' : 'message-other'}`}>
+                  <div key={index} className={`message-bubble ${msg.sender && String(msg.sender._id) === String(group.creator) ? 'message-mine' : 'message-other'}`}>
                     {msg.sender ? (
                       
                         <p className="font-medium text-sm mb-1">{msg.sender.username}</p>

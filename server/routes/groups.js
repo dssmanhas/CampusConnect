@@ -117,13 +117,12 @@ router.get('/:id', auth, async (req, res) => {
 
     // Debugging: Log the group object
     console.log(JSON.stringify(group, null, 2));
-     
-    const ismember = await Group.exists({
-      _id:group,
-      members:{$in:[req.user._id]}
-    })
     
-    ismember && res.json(group);
+    const ismember = (group.members || []).some(member => String(member._id || member) === String(req.user._id));
+    if (ismember) {
+      return res.json(group);
+    }
+    return res.status(403).json({ message: 'You are not a member of this group' });
     
   } catch (err) {
     console.error(err); // Log the error for debugging
@@ -144,7 +143,7 @@ router.post('/', auth, async (req, res) => {
     await group.save();
     
     // Add group to user's joinedGroups
-    await User.findByIdAndUpdate(req.userId, {
+    await User.findByIdAndUpdate(req.user._id, {
       $push: { joinedGroups: group._id }
     });
 
@@ -266,7 +265,7 @@ router.post('/delete', auth, async (req, res) => {
     const currentDate = new Date();
     currentDate.setHours(0, 0, 0, 0);
     const result = await Group.deleteMany({ date: { $lt: currentDate } });
-    console.log(groupsToDelete);
+    console.log(result);
     res.status(200).json({ message: `Deleted ${result.deletedCount} expired groups.` });
   } catch (error) {
     console.error('Error deleting expired groups:', error.message);

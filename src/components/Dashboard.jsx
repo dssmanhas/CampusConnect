@@ -9,7 +9,7 @@ function Dashboard() {
   const [groups, setGroups] = useState([]);
   const [error, setError] = useState('');
   const navigate = useNavigate();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [togglestate,setToggleState]=useState(false)
 
   useEffect(() => {
@@ -49,11 +49,11 @@ function Dashboard() {
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      console.log(response.data);
       navigate(`/group/${response.data._id}`);
     } catch (err) {
       setError('Failed to create group');
     }
-    console.log(response.data);
   };
   const joinGroup = async (groupId) => {
     try {
@@ -72,21 +72,21 @@ function Dashboard() {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      response&&navigate(`/group/${groupId}`)
+      if (response) navigate(`/group/${groupId}`);
       
     } catch (err) {
       console.error('Failed to fetch group details');
     }
-      navigate(`/group/${groupId}`);
   }
   const leaveGroup = async (groupId) => {
     try {
-      const response = await axios.get(`http://localhost:5000/api/groups/${groupId}/leave`, {
+      await axios.post(`http://localhost:5000/api/groups/${groupId}/leave`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      
+      setToggleState(prev => !prev);
     } catch (err) {
-      console.error('Failed to fetch group details');
+      console.error('Failed to leave group', err);
+      setError('Failed to leave group');
     }
   }
   const deleteGroup = async (groupId) => {
@@ -186,7 +186,7 @@ function Dashboard() {
                 </div>
               </div>
               <div className='flex px-2 gap-2'>
-              {!group.members.some(member => member._id === group.userId) && (
+              {!group.members.some(member => String(member._id || member) === String(user?._id)) && (
               <button
                 onClick={() => joinGroup(group._id)}
                 className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 focus:ring-4 focus:ring-green-500/50 transition"
@@ -194,7 +194,7 @@ function Dashboard() {
                 Join Group
               </button>
               )}
-              {group.members.some(member => member._id === group.userId) && (
+              {group.members.some(member => String(member._id || member) === String(user?._id)) && (
               <button
                 onClick={() => openGroup(group._id)}
                 className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 focus:ring-4 focus:ring-green-500/50 transition"
@@ -202,7 +202,7 @@ function Dashboard() {
                 Open Group
               </button>
               )}
-             {group.members.some(member => member._id === group.userId) && (
+             {group.members.some(member => String(member._id || member) === String(user?._id)) && (
               <button
                 onClick={() => leaveGroup(group._id)}
                 className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:ring-4 focus:ring-green-500/50 transition"

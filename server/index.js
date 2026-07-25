@@ -39,7 +39,8 @@ io.on('connection', (socket) => {
   });
 
   socket.on('send_message', (data) => {
-    io.to(data.groupId).emit('receive_message', data);
+    // Broadcast to other clients in the room (exclude sender) to avoid duplicate messages
+    socket.to(data.groupId).emit('receive_message', data);
   });
 });
 
