@@ -184,12 +184,11 @@ router.post('/:id/messages', auth, async (req, res) => {
   try {
     const { content } = req.body;
     const group = await Group.findById(req.params.id);
-    
+
     if (!group) {
       return res.status(404).json({ message: 'Group not found' });
     }
 
-    console.log(req.user._id)
     const message = {
       sender: req.user._id,
       content,
@@ -199,14 +198,12 @@ router.post('/:id/messages', auth, async (req, res) => {
     group.messages.push(message);
     await group.save();
 
-    // Populate sender info before sending response
-    const populatedMessage = await Group.populate(message, {
-      path: 'sender',
-      select: 'username'
-    });
+    const populatedGroup = await Group.findById(req.params.id).populate('messages.sender', 'username');
+    const newMessage = populatedGroup.messages[populatedGroup.messages.length - 1];
+    const messagePayload = newMessage.toObject ? newMessage.toObject() : newMessage;
 
     res.json({
-      ...populatedMessage,
+      ...messagePayload,
       groupId: group._id
     });
   } catch (err) {

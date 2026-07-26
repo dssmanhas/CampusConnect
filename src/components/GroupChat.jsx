@@ -16,17 +16,43 @@ function GroupChat() {
   const socketRef = useRef();
   const messagesEndRef = useRef(null);
 
+  const normalizeMessage = (msg) => {
+    const sender = msg?.sender;
+    const normalizedSender = sender && typeof sender === 'object'
+      ? sender
+      : { _id: sender, username: 'Unknown' };
+
+    const safeSender = normalizedSender && (normalizedSender._id || normalizedSender.username)
+      ? normalizedSender
+      : { _id: user?._id, username: user?.username || 'You' };
+
+    return {
+      ...msg,
+      sender: safeSender,
+      timestamp: msg?.timestamp || new Date().toISOString(),
+      _id: msg?._id || `${safeSender._id || 'unknown'}-${msg?.content || 'message'}-${msg?.timestamp || Date.now()}`
+    };
+  };
+
+  const getMessageKey = (msg) => String(msg?._id || `${msg?.sender?._id || 'unknown'}-${msg?.content || ''}-${msg?.timestamp || ''}`);
+
   useEffect(() => {
     socketRef.current = io('http://localhost:5000');
     socketRef.current.emit('join_group', id);
 
     socketRef.current.on('receive_message', (data) => {
-      setMessages(prev => [...prev, data]);
+      const incoming = normalizeMessage(data);
+      setMessages(prev => {
+        if (prev.some(msg => getMessageKey(msg) === getMessageKey(incoming))) {
+          return prev;
+        }
+        return [...prev, incoming];
+      });
       scrollToBottom();
     });
 
     fetchGroupDetails();
-    
+
     return () => socketRef.current.disconnect();
   }, [id]);
 
@@ -39,8 +65,9 @@ function GroupChat() {
       const response = await axios.get(`http://localhost:5000/api/groups/${id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      const normalizedMessages = (response.data.messages || []).map(normalizeMessage);
       setGroup(response.data);
-      setMessages(response.data.messages);
+      setMessages(normalizedMessages);
       setLoading(false);
       setLoadingMessages(false);
       scrollToBottom();
@@ -62,15 +89,14 @@ function GroupChat() {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      // Ensure sender info is present (server may not have populated sender for broadcast)
-      const msgToEmit = { ...response.data };
-      if (!msgToEmit.sender || !msgToEmit.sender.username) {
-        msgToEmit.sender = { _id: user?._id, username: user?.username };
-      }
-
-      // Emit to server (server will broadcast to others). Append locally so sender sees message immediately.
+      const msgToEmit = normalizeMessage(response.data);
       socketRef.current.emit('send_message', msgToEmit);
-      setMessages(prev => [...prev, msgToEmit]);
+      setMessages(prev => {
+        if (prev.some(msg => getMessageKey(msg) === getMessageKey(msgToEmit))) {
+          return prev;
+        }
+        return [...prev, msgToEmit];
+      });
       setMessage('');
       scrollToBottom();
     } catch (err) {
@@ -125,20 +151,16 @@ function GroupChat() {
             <div className="h-[600px] flex flex-col">
               <div className="flex-1 overflow-y-auto mb-4 space-y-4">
                 {messages.map((msg, index) => (
-                  <div key={index} className={`message-bubble ${msg.sender && String(msg.sender._id) === String(group.creator) ? 'message-mine' : 'message-other'}`}>
+                  <div key={msg._id || `${msg.sender?._id || 'unknown'}-${index}`} className={`message-bubble ${msg.sender && String(msg.sender._id) === String(group.creator) ? 'message-mine' : 'message-other'}`}>
                     {msg.sender ? (
-                      
-                        <p className="font-medium text-sm mb-1">{msg.sender.username}</p>
-                      ) : (
+                      <p className="font-medium text-sm mb-1">{msg.sender.username || 'Unknown'}</p>
+                    ) : (
                       <p>Sender information unavailable</p>
-              
                     )}
-                        <p>{msg.content}</p>
-                        <p className="text-xs opacity-75 mt-1">
-                          {new Date(msg.timestamp).toLocaleTimeString()}
-                        </p>
-                      
-                    
+                    <p>{msg.content}</p>
+                    <p className="text-xs opacity-75 mt-1">
+                      {new Date(msg.timestamp).toLocaleTimeString()}
+                    </p>
                   </div>
                 ))}
                 <div ref={messagesEndRef} />
